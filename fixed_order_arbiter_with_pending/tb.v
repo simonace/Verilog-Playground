@@ -8,12 +8,14 @@ end
 reg           clk_tb;
 reg           rstn_tb;
 reg   [3:0]   req_tb;
+reg           enable_tb;
 wire  [3:0]   grant_tb;
 
 fixed_order_arbiter_with_pending dut(
   .clk    (clk_tb),
   .rstn   (rstn_tb),
   .req    (req_tb),
+  .enable (enable_tb),
   .grant  (grant_tb)
 );
 
@@ -21,6 +23,7 @@ initial begin
   clk_tb <= 1'b0;
   rstn_tb <= 1'b1;
   req_tb <= 4'b0000;
+  enable_tb <= 1'b1;
   #1000;
   rstn_tb <= 1'b0;
   #1000;
@@ -33,6 +36,7 @@ initial begin
   req_tb <= 4'b1000;
   #200;
   req_tb <= 4'b0000;
+  enable_tb <= 1'b0;
   #800;
   req_tb <= 4'b1000;
   #200;

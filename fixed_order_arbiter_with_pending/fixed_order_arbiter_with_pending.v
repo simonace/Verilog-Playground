@@ -2,6 +2,7 @@ module fixed_order_arbiter_with_pending(
   input   wire          clk,
   input   wire          rstn,
   input   wire  [3:0]   req,
+  input   wire          enable,
   output  reg   [3:0]   grant
 );
 
@@ -33,7 +34,7 @@ assign pending_grant[0] = req_pending[0];
 assign pending_grant[1] = req_pending[1] & ~(with_pending_0);
 assign pending_grant[2] = req_pending[2] & ~(with_pending_1);
 assign pending_grant[3] = req_pending[3] & ~(with_pending_2);
-assign next_grant[3:0] = pending_grant[3:0] | direct_grant[3:0];
+assign next_grant[3:0] = (pending_grant[3:0] | direct_grant[3:0]) & {4{enable}};
 assign next_pending[3:0] = (~next_grant[3:0]) & (req_pending[3:0] | req[3:0]);
 
 always @(posedge clk or negedge rstn) begin
