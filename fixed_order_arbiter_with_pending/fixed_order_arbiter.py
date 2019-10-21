@@ -1,6 +1,6 @@
 CHANNEL_NUM = 4
 
-moduleName = "fixed_order_arbiter_with_pending_" + str(CHANNEL_NUM) + "channels"
+moduleName = "fixed_order_arbiter_with_pending_" + str(CHANNEL_NUM) + "_channels"
 
 f = open(moduleName + ".v", "w+")
 
@@ -8,6 +8,7 @@ f.write("module " + moduleName + " (\n")
 f.write(' '*4 + "input".ljust(8) + "wire".ljust(8) + ''.ljust(8) + "clk".ljust(8) + ',' + '\n')
 f.write(' '*4 + "input".ljust(8) + "wire".ljust(8) + ''.ljust(8) + "rstn".ljust(8) + ',' + '\n')
 f.write(' '*4 + "input".ljust(8) + "wire".ljust(8) + ("[" + str(CHANNEL_NUM-1) + ":0]").ljust(8) + "req".ljust(8) + ',' + '\n')
+f.write(' '*4 + "input".ljust(8) + "wire".ljust(8) + ''.ljust(8) + "enable".ljust(8) + ',' + '\n')
 f.write(' '*4 + "output".ljust(8) + "reg".ljust(8) + ("[" + str(CHANNEL_NUM-1) + ":0]").ljust(8) + "grant".ljust(8) + '\n')
 f.write(");\n")
 
@@ -51,7 +52,7 @@ for i in range(CHANNEL_NUM):
         f.write("assign " + ("pending_grant[" + str(i) + "]").ljust(20) + " = req_pending[0];\n")
     else:
         f.write("assign " + ("pending_grant[" + str(i) + "]").ljust(20) + " = no_pend_all & no_pend_0_to_" + str(i-1) + "& req_pending[" + str(i) + "];\n")
-f.write("assign " + "next_grant".ljust(20) + " = pending_grant | direct_grant;\n")
+f.write("assign " + "next_grant".ljust(20) + " = (pending_grant | direct_grant) & {" + str(CHANNEL_NUM) + "{enable}};\n")
 f.write("assign " + "next_pending".ljust(20) + " = (~next_grant) & ( req_pending | req);\n\n")
 
 f.write("always @(posedge clk or negedge rstn) begin\n")
