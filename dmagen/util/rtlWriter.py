@@ -33,7 +33,7 @@ def writeRegWireLine(f, regWire, indent=0, withSemiComma=True, withNextLine=True
         w = "[" + str(regWire[2]-1) + ":0]"
     else:
         w = ''
-    f.write(' '*indent + rw.ljust(8) + w.ljust(8) + regWire[0].ljust(24) +
+    f.write(' '*indent + rw.ljust(8) + w.ljust(8) + regWire[0].ljust(32) +
             (";" if withSemiComma else '') + ('\n' if withNextLine else ''))
 
 def writeAssign(f, wireName, assignList, comment='', indent=0):
@@ -49,9 +49,12 @@ def writeAssign(f, wireName, assignList, comment='', indent=0):
 def writeFlop(f, clkName, rstnName, structList, comment=''):
     if comment:
         f.write("// " + comment + '\n')
-    f.write("always @(posedge " + clkName + "or negedge " + rstnName + ") begin\n")
+    if clkName=='' and rstnName=='':
+        f.write("always @(*) begin\n")
+    else:
+        f.write("always @(posedge " + clkName + "or negedge " + rstnName + ") begin\n")
     for s in structList:
-        s.writeRTL(f, 4)
+        s.writeRtl(f, 4)
     f.write("end\n")
 
 def writeRegAssign(f, regName, assignList, indent=0, nonBlocking=True):
@@ -62,15 +65,20 @@ def writeRegAssign(f, regName, assignList, indent=0, nonBlocking=True):
         assignerString = assignerString + ' ' + s + (' '*assigneeLen if s=='\n' else '')
     f.write(assigneeString + assignerString + ';\n')
 
+def writeLocalParam(f, paramName, value, comment='', indent=0):
+    if comment:
+        f.write("// " + comment + '\n')
+    f.write("localparam".ljust(12) + paramName.ljust(20) + " = ".ljust(4) + value + ';\n')
+
 class IfStruct(object):
     def __init__(self, cond, subStructList):
         self.subStructList = subStructList
         self.cond = cond
 
-    def writeRTL(self, f, indent=0):
+    def writeRtl(self, f, indent=0):
         f.write(' '*indent + "if (" + self.cond + ") begin\n")
         for s in self.subStructList:
-            s.writeRTL(f=f, indent=indent+4)
+            s.writeRtl(f=f, indent=indent+4)
         f.write(' '*indent + "end\n")
 
 class ElifStruct(object):
@@ -78,20 +86,20 @@ class ElifStruct(object):
         self.subStructList = subStructList
         self.cond = cond
 
-    def writeRTL(self, f, indent=0):
+    def writeRtl(self, f, indent=0):
         f.write(' '*indent + "else if (" + self.cond + ") begin\n")
         for s in self.subStructList:
-            s.writeRTL(f=f, indent=indent+4)
+            s.writeRtl(f=f, indent=indent+4)
         f.write(' '*indent + "end\n")
 
 class ElseStruct(object):
     def __init__(self, subStructList):
         self.subStructList = subStructList
 
-    def writeRTL(self, f, indent=0):
+    def writeRtl(self, f, indent=0):
         f.write(' '*indent + "else begin\n")
         for s in self.subStructList:
-            s.writeRTL(f=f, indent=indent+4)
+            s.writeRtl(f=f, indent=indent+4)
         f.write(' '*indent + "end\n")
 
 class AssignStruct(object):
@@ -100,26 +108,43 @@ class AssignStruct(object):
         self.assignList = assignList
         self.nonBlocking = nonBlocking
 
-    def writeRTL(self, f, indent=0):
+    def writeRtl(self, f, indent=0):
         writeRegAssign(f, self.regName, self.assignList, indent, self.nonBlocking)
+
+class CaseStruct(object):
+    def __init__(self, cond, branchDict):
+        self.cond = cond
+        self.branchDict = branchDict
+
+    def writeRtl(self, f, indent=0):
+        f.write(' '*indent + "case(" + self.cond + ")\n")
+        for v,sList in self.branchDict.items():
+            f.write(' '*(indent+4) + v + ": begin\n")
+            for s in sList:
+                s.writeRtl(f=f, indent=indent+8)
+            f.write(' '*(indent+4) + "end\n")
+        f.write(' '*indent + "endcase\n")
         
     
 
 def _writePortLine(f, port, indent=4, withComma=True, withNextLine=True):
-    if port[2] == 'r':
-        regWire = "reg"
-    elif port[2] == 'w':
-        regWire = "wire"
-    if port[1] == 'i':
-        inout = "input"
-        regWire = "wire"
-    elif port[1] == "o":
-        inout = "output"
-    if port[3]>1:
-        w = "[" + str(port[3]-1) + ":0]"
+    if port[1] == 'c' or port[2] == 'c':
+        f.write(' '*indent + "// " + port[0] + '\n')
     else:
-        w = ''
-    f.write(' '*indent + inout.ljust(8) + regWire.ljust(8) + w.ljust(8) + port[0].ljust(24) +
-            ("," if withComma else '') + ('\n' if withNextLine else '')) 
+        if port[2] == 'r':
+            regWire = "reg"
+        elif port[2] == 'w':
+            regWire = "wire"
+        if port[1] == 'i':
+            inout = "input"
+            regWire = "wire"
+        elif port[1] == "o":
+            inout = "output"
+        if port[3]>1:
+            w = "[" + str(port[3]-1) + ":0]"
+        else:
+            w = ''
+        f.write(' '*indent + inout.ljust(8) + regWire.ljust(8) + w.ljust(8) + port[0].ljust(32) +
+                ("," if withComma else '') + ('\n' if withNextLine else '')) 
     
         
