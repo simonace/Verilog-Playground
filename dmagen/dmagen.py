@@ -14,3 +14,5 @@ if __name__ == "__main__":
     arb.createRtl()
     fsm = util.fileGen.ChannelFsm()
     fsm.createRtl()
+    reg = util.fileGen.DmaRegFile(channelDict)
+    reg.createRtl()
