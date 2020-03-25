@@ -16,3 +16,5 @@ if __name__ == "__main__":
     fsm.createRtl()
     reg = util.fileGen.DmaRegFile(channelDict)
     reg.createRtl()
+    ahbFile = util.fileGen.AhbReadWrite()
+    ahbFile.createRtl()

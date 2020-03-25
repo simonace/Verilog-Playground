@@ -289,11 +289,78 @@ class DmaRegFile(object):
                                             [rtlWriter.AssignStruct(self.channelNameList[i]+"_channel_next_cnt", ["PWDATA[15:0]"])])
                         ]
             rtlWriter.writeFlop(f, "PCLK", "PRESETn", nCntList, self.channelNameList[i]+" Channel NEXT_COUNTER register")
-
-            
-
             f.write('\n')
         f.write('\n')
         f.write("endmodule")
         f.close()
+
+class AhbReadWrite(object):
+    def __init__(self):
+        self.moduleName = "ahb_lite_master_rw_interface"
+        self.portList = [("HCLK", 'i', 'w', 1),
+                         ("HRESETn", 'i', 'w', 1),
+                         ("HREADY", 'i', 'w', 1),
+                         ("HRDATA", 'i', 'w', 32),
+                         ("HADDR", 'o', 'w', 32),
+                         ("HWRITE", 'o', 'w', 1),
+                         ("HSIZE", 'o', 'w', 3),
+                         ("HWDATA", 'o', 'w', 32),
+                         ("HTRANS", 'o', 'w', 2),
+                         ("trans_valid", 'i', 'w', 1),
+                         ("trans_hsize", 'i', 'w', 3),
+                         ("trans_haddr", 'i', 'w', 32),
+                         ("trans_hwrite", 'i', 'w', 1)
+                         ]
+
+    def createRtl(self):
+        f = open(self.moduleName + ".v", "w+")
+        rtlWriter.writeHeaderInfoComment(f, self.moduleName)
+        f.write('\n'*2)
+        rtlWriter.writeModulePortList(f, self.moduleName, self.portList)
+        f.write('\n'*2)
+        rtlWriter.writeRegWireLine(f, ("haddr_pipeline_1", 'r', 32))
+        rtlWriter.writeRegWireLine(f, ("hwrite_pipeline_1", 'r', 1))
+        rtlWriter.writeRegWireLine(f, ("hwrite_pipeline_2", 'r', 1))
+        rtlWriter.writeRegWireLine(f, ("hsize_pipeline_1", 'r', 3))
+        rtlWriter.writeRegWireLine(f, ("trans_valid_pipeline_1", 'r', 1))
+        rtlWriter.writeRegWireLine(f, ("trans_valid_pipeline_2", 'r', 1))
+        rtlWriter.writeRegWireLine(f, ("trans_data", 'r', 32))
+        f.write('\n'*2)
+        rtlWriter.writeAssign(f, "HTRANS", ["{trans_valid_pipeline_1,", "1'b0"])
+        rtlWriter.writeAssign(f, "HADDR", ["haddr_pipeline_1"])
+        rtlWriter.writeAssign(f, "HSIZE", ["hsize_pipeline_1"])
+        rtlWriter.writeAssign(f, "HWRITE", ["hwrite_pipeline_1"])
+        rtlWriter.writeAssign(f, "HWDATA", ["trans_data"])
+        f.write('\n')
+        pipeList = [rtlWriter.IfStruct("~HRESETn", [rtlWriter.AssignStruct("trans_valid_pipeline_1", ["1'b0"]),
+                                                    rtlWriter.AssignStruct("trans_valid_pipeline_2", ["1'b0"]),
+                                                    rtlWriter.AssignStruct("haddr_pipeline_1", ["32'h0"]),
+                                                    rtlWriter.AssignStruct("hwrite_pipeline_1", ["1'b0"]),
+                                                    rtlWriter.AssignStruct("hwrite_pipeline_2", ["1'b0"]),
+                                                    rtlWriter.AssignStruct("hsize_pipeline_1", ["3'b000"])
+                                                    ]),
+                    rtlWriter.ElifStruct("HREADY", [rtlWriter.AssignStruct("trans_valid_pipeline_1", ["trans_valid"]),
+                                                    rtlWriter.AssignStruct("trans_valid_pipeline_2", ["trans_valid_pipeline_1"]),
+                                                    rtlWriter.AssignStruct("haddr_pipeline_1", ["trans_haddr"]),
+                                                    rtlWriter.AssignStruct("hwrite_pipeline_1", ["trans_hwrite"]),
+                                                    rtlWriter.AssignStruct("hwrite_pipeline_2", ["hwrite_pipeline_1"]),
+                                                    rtlWriter.AssignStruct("hsize_pipeline_1", ["trans_hsize"])
+                                                    ])
+                    ]
+        rtlWriter.writeFlop(f, "HCLK", "HRESETn", pipeList)
+        f.write('/n')
+        transDataList = [rtlWriter.IfStruct("~HRESETn", [rtlWriter.AssignStruct("trans_data", ["32'h0"])]),
+                         rtlWriter.ElifStruct("~hwrite_pipeline_2 & trans_valid_pipeline_2 & HREADY", [rtlWriter.AssignStruct("trans_data", ["HRDATA"])])]
+        rtlWriter.writeFlop(f, "HCLK", "HRESETn", transDataList)
+        f.write('\n'*2)
+        f.write("endmodule")
+        f.close()
         
+        
+            
+        
+        
+
+
+
+
