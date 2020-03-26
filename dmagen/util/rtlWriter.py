@@ -70,6 +70,9 @@ def writeLocalParam(f, paramName, value, comment='', indent=0):
         f.write("// " + comment + '\n')
     f.write("localparam".ljust(12) + paramName.ljust(20) + " = ".ljust(4) + value + ';\n')
 
+def writeInstancePortLine(f, portName, wireName, withComma=True):
+    f.write(' '*4 + ("." + portName).ljust(24) + ("(" + wireName + ")").ljust(32) + ("," if withComma else '') + '\n')
+
 class IfStruct(object):
     def __init__(self, cond, subStructList):
         self.subStructList = subStructList

@@ -166,10 +166,10 @@ class DmaRegFile(object):
 
             if chType.dir == 't':
                 dirList.append((chName+" is TX channel", 'c', 'c', 1))
-                dirList.append((chName+"_rd_addr", 'o', 'r', 32))
+                dirList.append((chName+"_rd_addr", 'o', 'w', 32))
             elif chType.dir == 'r':
                 dirList.append((chName+" is RX channel", 'c', 'c', 1))
-                dirList.append((chName+"_wr_addr", 'o', 'r', 32))
+                dirList.append((chName+"_wr_addr", 'o', 'w', 32))
 
         self.portList = self.portList + sizeList + dirList + [("transfer_finish", 'i', 'w', self.channelNum),
                                                               ("channel_available", 'o', 'w', self.channelNum)
@@ -214,6 +214,8 @@ class DmaRegFile(object):
         rtlWriter.writeAssign(f, "COUNTER_addr_match", ["PADDR[4:2]", "==", "3'b011"])
         rtlWriter.writeAssign(f, "NEXT_POINTER_addr_match", ["PADDR[4:2]", "==", "3'b100"])
         rtlWriter.writeAssign(f, "NEXT_COUNTER_addr_match", ["PADDR[4:2]", "==", "3'b101"])
+        for n, t in self.channelDict.items():
+            rtlWriter.writeAssign(f, n+"_"+("wr" if t.dir=='r' else "rd")+"_addr", [n+"_channel_pnt"])
         for i in range(len(self.channelNameList)):
             b=bin(i)[2:]
             bb="5'b" + '0'*(5-len(b)) + b
@@ -293,6 +295,175 @@ class DmaRegFile(object):
         f.write('\n')
         f.write("endmodule")
         f.close()
+
+class TopFile(object):
+    def __init__(self, channelDict):
+        self.channelDict = channelDict
+        self.channelNum = len(self.channelDict)
+        self.moduleName = "dma_" + str(self.channelNum) + "_channels"
+        self.portList = [("APB interface", 'c', 'c', 1),
+                         ("PCLK", 'i', 'w', 1),
+                         ("PRESETn", 'i', 'w', 1),
+                         ("PSEL", 'i', 'w', 1),
+                         ("PENABLE", 'i', 'w', 1),
+                         ("PWRITE", 'i', 'w', 1),
+                         ("PADDR", 'i', 'w', 10),
+                         ("PWDATA", 'i', 'w', 32),
+                         ("PRDATA", 'o', 'r', 32),
+                         ("AHB interface", 'c', 'c', 1),
+                         ("HCLK", 'i', 'w', 1),
+                         ("HRESETn", 'i', 'w', 1),
+                         ("HREADY", 'i', 'w', 1),
+                         ("HRDATA", 'i', 'w', 32),
+                         ("HADDR", 'o', 'w', 32),
+                         ("HWRITE", 'o', 'w', 1),
+                         ("HSIZE", 'o', 'w', 3),
+                         ("HWDATA", 'o', 'w', 32),
+                         ("HTRANS", 'o', 'w', 2),
+                         ("DMA interface", 'c', 'c', 1),
+                         ("req", 'i', 'w', self.channelNum)
+                         ]
+        for n, t in self.channelDict.items():
+            if t.size=='v':
+                self.portList.append((n+"_size", 'i', 'w', 3))
+
+    def createRtl(self):
+        f = open(self.moduleName + ".v", "w+")
+        rtlWriter.writeHeaderInfoComment(f, self.moduleName)
+        self._channelDiscriptionComment(f)
+        f.write('\n'*2)
+        rtlWriter.writeModulePortList(f, self.moduleName, self.portList)
+        f.write('\n'*2)
+        for n, t in self.channelDict.items():
+            f.write("// Channel "+n+" signals\n")
+            rtlWriter.writeRegWireLine(f, (n+"_trans_valid", 'w', 1))
+            rtlWriter.writeRegWireLine(f, (n+"_trans_hsize", 'w', 3))
+            rtlWriter.writeRegWireLine(f, (n+"_trans_haddr", 'w', 32))
+            rtlWriter.writeRegWireLine(f, (n+"_trans_hwrite", 'w', 1))
+            rtlWriter.writeRegWireLine(f, (n+"_"+ ("wr" if t.dir=='r' else "rd")+"_addr", 'w', 32))
+        f.write('\n')
+        rtlWriter.writeRegWireLine(f, ("start", 'w', self.channelNum))
+        rtlWriter.writeRegWireLine(f, ("channel_available", 'w', self.channelNum))
+        rtlWriter.writeRegWireLine(f, ("channel_not_trans", 'w', self.channelNum))
+        rtlWriter.writeRegWireLine(f, ("allow_accept_req", 'w', self.channelNum))
+        rtlWriter.writeRegWireLine(f, ("transfer_finish", 'w', self.channelNum))
+        rtlWriter.writeRegWireLine(f, ("trans_valid", 'w', 1))
+        rtlWriter.writeRegWireLine(f, ("trans_hsize", 'r', 3))
+        rtlWriter.writeRegWireLine(f, ("trans_haddr", 'r', 32))
+        rtlWriter.writeRegWireLine(f, ("trans_hwrite", 'r', 1))
+        f.write('\n'*2)
+        caseDict = {}
+        validList = []
+        i = 0
+        for n in self.channelDict.keys():
+            caseDict[n+"_trans_valid"] = [rtlWriter.AssignStruct("trans_hsize", [n+"_trans_hsize"], False),
+                                          rtlWriter.AssignStruct("trans_haddr", [n+"_trans_haddr"], False),
+                                          rtlWriter.AssignStruct("trans_hwrite", [n+"_trans_haddr"], False)]
+            validList.append(n+"_trans_valid")
+            if not i==self.channelNum-1:
+                validList.append("|")
+                if i%4==0 and i !=0:
+                    validList.append('\n')
+            i=i+1  
+        muxList = [rtlWriter.AssignStruct("trans_hsize", ["3'b000"], False),
+                   rtlWriter.AssignStruct("trans_haddr", ["32'h0"], False),
+                   rtlWriter.AssignStruct("trans_hwrite", ["1'b0"], False),
+                   rtlWriter.CaseStruct("1'b1", caseDict)]
+        rtlWriter.writeFlop(f, "", "", muxList)
+        rtlWriter.writeAssign(f, "trans_valid", validList)
+        f.write('\n'*2)
+        f.write("fixed_order_arbiter_" + str(self.channelNum) + "_channels u_arb(\n")
+        rtlWriter.writeInstancePortLine(f, "clk", "HCLK")
+        rtlWriter.writeInstancePortLine(f, "rstn", "HRESETn")
+        rtlWriter.writeInstancePortLine(f, "req", "req")
+        rtlWriter.writeInstancePortLine(f, "channel_available", "channel_available")
+        rtlWriter.writeInstancePortLine(f, "channel_not_trans", "channel_not_trans")
+        rtlWriter.writeInstancePortLine(f, "allow_accept_req", "allow_accept_req")
+        rtlWriter.writeInstancePortLine(f, "start", "start", False)
+        f.write(");\n")
+        f.write('\n')
+        f.write("ahb_lite_master_rw_interface u_rw_interface(\n")
+        rtlWriter.writeInstancePortLine(f, "HCLK", "HCLK")
+        rtlWriter.writeInstancePortLine(f, "HRESETn", "HRESETn")
+        rtlWriter.writeInstancePortLine(f, "HREADY", "HREADY")
+        rtlWriter.writeInstancePortLine(f, "HADDR", "HADDR")
+        rtlWriter.writeInstancePortLine(f, "HWRITE", "HWRITE")
+        rtlWriter.writeInstancePortLine(f, "HSIZE", "HSIZE")
+        rtlWriter.writeInstancePortLine(f, "HWDATA", "HWDATA")
+        rtlWriter.writeInstancePortLine(f, "HTRANS", "HTRANS")
+        rtlWriter.writeInstancePortLine(f, "trans_valid", "trans_valid")
+        rtlWriter.writeInstancePortLine(f, "trans_hsize", "trans_hsize")
+        rtlWriter.writeInstancePortLine(f, "trans_haddr", "trans_haddr")
+        rtlWriter.writeInstancePortLine(f, "trans_hwrite", "trans_hwrite", False)
+        f.write(");\n")
+        f.write('\n')
+        f.write("dma_reg_" + str(self.channelNum) + "_channels u_reg(\n")
+        rtlWriter.writeInstancePortLine(f, "PCLK", "PCLK")
+        rtlWriter.writeInstancePortLine(f, "PRESETn", "PRESETn")
+        rtlWriter.writeInstancePortLine(f, "PSEL", "PSEL")
+        rtlWriter.writeInstancePortLine(f, "PENABLE", "PENABLE")
+        rtlWriter.writeInstancePortLine(f, "PWRITE", "PWRITE")
+        rtlWriter.writeInstancePortLine(f, "PADDR", "PADDR")
+        rtlWriter.writeInstancePortLine(f, "PWDATA", "PWDATA")
+        rtlWriter.writeInstancePortLine(f, "PRDATA", "PRDATA")
+        for n, t in self.channelDict.items():
+            if t.size=='v':
+                rtlWriter.writeInstancePortLine(f, n+"_size", n+"_size")
+        for n, t in self.channelDict.items():
+                wrRd = n + '_' + ("wr" if t.dir=='r' else "rd") + "_addr"
+                rtlWriter.writeInstancePortLine(f, wrRd, wrRd)
+        rtlWriter.writeInstancePortLine(f, "transfer_finish", "transfer_finish")
+        rtlWriter.writeInstancePortLine(f, "channel_available", "channel_available", False)
+        f.write(");\n")
+        f.write('\n')
+        i=0
+        for n, t in self.channelDict.items():
+            f.write("// Channel "+str(i)+":".ljust(12) + n.ljust(24) + ("RX" if t.dir=='r' else "TX") + '\n')
+            f.write("dma_channel_fsm u_channel_" + n + "(\n")
+            rtlWriter.writeInstancePortLine(f, "clk", "HCLK")
+            rtlWriter.writeInstancePortLine(f, "rstn", "HRESETn")
+            rtlWriter.writeInstancePortLine(f, "start", "start[" + str(i)+"]")
+            if t.dir=='r':
+                rtlWriter.writeInstancePortLine(f, "rd_addr", t.paddr)
+                rtlWriter.writeInstancePortLine(f, "wr_addr", n+"_wr_addr")
+            else:
+                rtlWriter.writeInstancePortLine(f, "rd_addr", n+"_rd_addr")
+                rtlWriter.writeInstancePortLine(f, "wr_addr", t.paddr)
+            if t.size=='v':
+                s = n+"_size"
+            elif t.size==1:
+                s = "3'b000"
+            elif t.size==2:
+                s = "3'b001"
+            elif t.size==3:
+                s = "3'b010"
+            rtlWriter.writeInstancePortLine(f, "hsize", s)
+            rtlWriter.writeInstancePortLine(f, "trans_valid", n+"_trans_valid")
+            rtlWriter.writeInstancePortLine(f, "trans_hsize", n+"_trans_hsize")
+            rtlWriter.writeInstancePortLine(f, "trans_haddr", n+"_trans_haddr")
+            rtlWriter.writeInstancePortLine(f, "trans_hwrite", n+"_trans_hwrite")
+            rtlWriter.writeInstancePortLine(f, "channel_not_trans", "channel_not_trans["+str(i)+"]")
+            rtlWriter.writeInstancePortLine(f, "allow_accept_req", "allow_accept_req["+str(i)+"]")
+            rtlWriter.writeInstancePortLine(f, "transfer_finish", "transfer_finish["+str(i)+"]", False)
+            f.write(");\n")
+            f.write('\n')
+            i=i+1
+        f.write('\n')
+        f.write("endmodule")
+        f.close()
+
+    def _channelDiscriptionComment(self, f):
+        f.write("//\n")
+        f.write("//" + "-"*70 + '\n')
+        f.write("//" + "DMA Channel Discription".center(70) + '\n')
+        f.write("//" + "-"*70 + '\n')
+        f.write("//|" + "Channel Nr.".center(12)+ "|" + "Channel Name".center(24) + "|" + "Direction".center(12) + "|" + "TX/RX Reg Addr".center(18)+'\n')
+        f.write("//|" + '-'*12 + "|" + '-'*24 + "|" + '-'*12 + "|" + '-'*18 + '\n')
+        i = 0
+        for n, t in self.channelDict.items():
+            f.write("//|" + str(i).center(12) + "|" + n.center(24) + "|" + ("RX" if t.dir=='r' else "TX").center(12) + "|" + t.paddr.center(18) + '\n')
+            i = i+1
+        f.write("//|" + '-'*12 + "|" + '-'*24 + "|" + '-'*12 + "|" + '-'*18 + '\n')
 
 class AhbReadWrite(object):
     def __init__(self):

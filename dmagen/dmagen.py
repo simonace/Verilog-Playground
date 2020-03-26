@@ -1,9 +1,9 @@
 from collections import namedtuple
 ChannelType = namedtuple("ChannelType", ["dir", "paddr", "size"])
-channelDict = {"ch0"    :  ChannelType("r", "0x12345000", 'v'),
-               "ch1"    :  ChannelType("t", "0x4000ac00", 1),
-               "ch2"    :  ChannelType("r", "0x50004400", 2),
-               "ch3"    :  ChannelType("t", "0x4abcd800", 3)
+channelDict = {"ch0"    :  ChannelType("r", "32'h12345000", 'v'),
+               "ch1"    :  ChannelType("t", "32'h4000ac00", 1),
+               "ch2"    :  ChannelType("r", "32'h50004400", 2),
+               "ch3"    :  ChannelType("t", "32'h4abcd800", 3)
                }
 
 
@@ -16,5 +16,7 @@ if __name__ == "__main__":
     fsm.createRtl()
     reg = util.fileGen.DmaRegFile(channelDict)
     reg.createRtl()
+    topFile = util.fileGen.TopFile(channelDict)
+    topFile.createRtl()
     ahbFile = util.fileGen.AhbReadWrite()
     ahbFile.createRtl()
