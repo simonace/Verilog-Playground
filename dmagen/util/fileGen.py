@@ -104,6 +104,7 @@ class ChannelFsm(object):
         f.write('\n')
         rtlWriter.writeRegWireLine(f, ("current_state", 'r', 4))
         rtlWriter.writeRegWireLine(f, ("next_state", 'r', 4))
+        rtlWriter.writeRegWireLine(f, ("allow_accept_req_d", 'r', 1))
         f.write('\n'*2)
         rtlWriter.writeAssign(f, "trans_valid", ["current_state[1]", "|", "current_state[2]"])
         rtlWriter.writeAssign(f, "trans_size", ["hsize"])
@@ -111,8 +112,9 @@ class ChannelFsm(object):
         rtlWriter.writeAssign(f, "trans_hwrite", ["current_state[2]"])
         rtlWriter.writeAssign(f, "channel_not_trans", ["current_state[0]", "|", "current_state[3]"])
         rtlWriter.writeAssign(f, "allow_accept_req", ["current_state[0]"])
+        rtlWriter.writeAssign(f, "transfer_finish", ["~allow_accept_req_d", "&", "allow_accept_req"])
         f.write('\n')
-        caseDict = {"STATE_IDLE": [rtlWriter.IfStruct("start & HREADY", [rtlWriter.AssignStruct("next_state", ["STATE_READ"], False)])],
+        caseDict = {"STATE_IDLE": [rtlWriter.IfStruct("start", [rtlWriter.AssignStruct("next_state", ["STATE_READ"], False)])],
                     "STATE_READ": [rtlWriter.IfStruct("HREADY", [rtlWriter.AssignStruct("next_state", ["STATE_WRITE"], False)])],
                     "STATE_WRITE": [rtlWriter.IfStruct("HREADY", [rtlWriter.AssignStruct("next_state", ["STATE_TAIL"], False)])],
                     "STATE_TAIL": [rtlWriter.IfStruct("HREADY", [rtlWriter.AssignStruct("next_state", ["STATE_IDLE"], False)])]
@@ -120,9 +122,11 @@ class ChannelFsm(object):
         sNextStateList = [rtlWriter.AssignStruct("next_state", ["current_state"], False), rtlWriter.CaseStruct("current_state", caseDict)]
         rtlWriter.writeFlop(f, "", "", sNextStateList, "next_state")
         f.write('\n')
-        sList = [rtlWriter.IfStruct("~rstn", [rtlWriter.AssignStruct("current_state", ["STATE_IDLE"])]),
-                 rtlWriter.ElseStruct([rtlWriter.AssignStruct("current_state", ["next_state"])])]
-        rtlWriter.writeFlop(f, "clk", "rstn", sList, "req_pending")
+        sList = [rtlWriter.IfStruct("~rstn", [rtlWriter.AssignStruct("current_state", ["STATE_IDLE"]),
+                                              rtlWriter.AssignStruct("allow_accept_req_d", ["1'b1"])]),
+                 rtlWriter.ElseStruct([rtlWriter.AssignStruct("current_state", ["next_state"]),
+                                       rtlWriter.AssignStruct("allow_accept_req_d", ["allow_accept_req"])])]
+        rtlWriter.writeFlop(f, "clk", "rstn", sList)
         f.write('\n')
         f.write("endmodule")
         f.close()
@@ -224,8 +228,8 @@ class DmaRegFile(object):
             rtlWriter.writeAssign(f, n+"_byte_size", ["4'b0001", "<<", n+"_size"])
         for i in range(len(self.channelNameList)):
             n = self.channelNameList[i]
-            rtlWriter.writeAssign(f, n+"_channel_cnt_zero", ["~(|"+n+"_channel_cnt[15:0]"])
-            rtlWriter.writeAssign(f, n+"_channel_next_cnt_zero", ["~(|"+n+"_channel_next_cnt[15:0]"])
+            rtlWriter.writeAssign(f, n+"_channel_cnt_zero", ["~(|"+n+"_channel_cnt[15:0])"])
+            rtlWriter.writeAssign(f, n+"_channel_next_cnt_zero", ["~(|"+n+"_channel_next_cnt[15:0])"])
             rtlWriter.writeAssign(f, n+"_channel_cnt_will_empty", ["("+n+"_channel_cnt", "<=", n+"_byte_size)", "&", "(~"+n+"_channel_cnt_zero)"])
             rtlWriter.writeAssign(f, n+"_channel_is_last_trans", [n+"_channel_cnt_will_empty", "&", n+"_channel_next_cnt_zero", "&",
                                                                   "transfer_finish["+str(i)+"]"])
@@ -309,7 +313,7 @@ class TopFile(object):
                          ("PWRITE", 'i', 'w', 1),
                          ("PADDR", 'i', 'w', 10),
                          ("PWDATA", 'i', 'w', 32),
-                         ("PRDATA", 'o', 'r', 32),
+                         ("PRDATA", 'o', 'w', 32),
                          ("AHB interface", 'c', 'c', 1),
                          ("HCLK", 'i', 'w', 1),
                          ("HRESETn", 'i', 'w', 1),
@@ -358,7 +362,7 @@ class TopFile(object):
         for n in self.channelDict.keys():
             caseDict[n+"_trans_valid"] = [rtlWriter.AssignStruct("trans_hsize", [n+"_trans_hsize"], False),
                                           rtlWriter.AssignStruct("trans_haddr", [n+"_trans_haddr"], False),
-                                          rtlWriter.AssignStruct("trans_hwrite", [n+"_trans_haddr"], False)]
+                                          rtlWriter.AssignStruct("trans_hwrite", [n+"_trans_hwrite"], False)]
             validList.append(n+"_trans_valid")
             if not i==self.channelNum-1:
                 validList.append("|")
@@ -386,6 +390,7 @@ class TopFile(object):
         rtlWriter.writeInstancePortLine(f, "HCLK", "HCLK")
         rtlWriter.writeInstancePortLine(f, "HRESETn", "HRESETn")
         rtlWriter.writeInstancePortLine(f, "HREADY", "HREADY")
+        rtlWriter.writeInstancePortLine(f, "HRDATA", "HRDATA")
         rtlWriter.writeInstancePortLine(f, "HADDR", "HADDR")
         rtlWriter.writeInstancePortLine(f, "HWRITE", "HWRITE")
         rtlWriter.writeInstancePortLine(f, "HSIZE", "HSIZE")
@@ -408,7 +413,7 @@ class TopFile(object):
         rtlWriter.writeInstancePortLine(f, "PRDATA", "PRDATA")
         for n, t in self.channelDict.items():
             if t.size=='v':
-                rtlWriter.writeInstancePortLine(f, n+"_size", n+"_size")
+                rtlWriter.writeInstancePortLine(f, n+"_size", n+"_size[1:0]")
         for n, t in self.channelDict.items():
                 wrRd = n + '_' + ("wr" if t.dir=='r' else "rd") + "_addr"
                 rtlWriter.writeInstancePortLine(f, wrRd, wrRd)
@@ -423,6 +428,7 @@ class TopFile(object):
             rtlWriter.writeInstancePortLine(f, "clk", "HCLK")
             rtlWriter.writeInstancePortLine(f, "rstn", "HRESETn")
             rtlWriter.writeInstancePortLine(f, "start", "start[" + str(i)+"]")
+            rtlWriter.writeInstancePortLine(f, "HREADY", "HREADY")
             if t.dir=='r':
                 rtlWriter.writeInstancePortLine(f, "rd_addr", t.paddr)
                 rtlWriter.writeInstancePortLine(f, "wr_addr", n+"_wr_addr")
@@ -497,7 +503,7 @@ class AhbReadWrite(object):
         rtlWriter.writeRegWireLine(f, ("trans_valid_pipeline_2", 'r', 1))
         rtlWriter.writeRegWireLine(f, ("trans_data", 'r', 32))
         f.write('\n'*2)
-        rtlWriter.writeAssign(f, "HTRANS", ["{trans_valid_pipeline_1,", "1'b0"])
+        rtlWriter.writeAssign(f, "HTRANS", ["{trans_valid_pipeline_1,", "1'b0}"])
         rtlWriter.writeAssign(f, "HADDR", ["haddr_pipeline_1"])
         rtlWriter.writeAssign(f, "HSIZE", ["hsize_pipeline_1"])
         rtlWriter.writeAssign(f, "HWRITE", ["hwrite_pipeline_1"])
@@ -519,7 +525,7 @@ class AhbReadWrite(object):
                                                     ])
                     ]
         rtlWriter.writeFlop(f, "HCLK", "HRESETn", pipeList)
-        f.write('/n')
+        f.write('\n')
         transDataList = [rtlWriter.IfStruct("~HRESETn", [rtlWriter.AssignStruct("trans_data", ["32'h0"])]),
                          rtlWriter.ElifStruct("~hwrite_pipeline_2 & trans_valid_pipeline_2 & HREADY", [rtlWriter.AssignStruct("trans_data", ["HRDATA"])])]
         rtlWriter.writeFlop(f, "HCLK", "HRESETn", transDataList)

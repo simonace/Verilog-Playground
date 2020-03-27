@@ -52,7 +52,7 @@ def writeFlop(f, clkName, rstnName, structList, comment=''):
     if clkName=='' and rstnName=='':
         f.write("always @(*) begin\n")
     else:
-        f.write("always @(posedge " + clkName + "or negedge " + rstnName + ") begin\n")
+        f.write("always @(posedge " + clkName + " or negedge " + rstnName + ") begin\n")
     for s in structList:
         s.writeRtl(f, 4)
     f.write("end\n")
