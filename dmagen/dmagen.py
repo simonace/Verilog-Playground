@@ -6,6 +6,7 @@ channelDict = {"ch0"    :  ChannelType("r", "32'h12345000", 'v'),
                "ch3"    :  ChannelType("t", "32'h4abcd800", 3)
                }
 
+WITH_NEXT_CNT_PNT_REG = True
 
 import util
 if __name__ == "__main__":
@@ -15,7 +16,7 @@ if __name__ == "__main__":
     fsm = util.fileGen.ChannelFsm()
     fsm.createRtl()
     reg = util.fileGen.DmaRegFile(channelDict)
-    reg.createRtl()
+    reg.createRtl(WITH_NEXT_CNT_PNT_REG)
     topFile = util.fileGen.TopFile(channelDict)
     topFile.createRtl()
     ahbFile = util.fileGen.AhbReadWrite()
