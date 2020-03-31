@@ -334,9 +334,10 @@ class TopFile(object):
                          ("HSIZE", 'o', 'w', 3),
                          ("HWDATA", 'o', 'w', 32),
                          ("HTRANS", 'o', 'w', 2),
-                         ("DMA interface", 'c', 'c', 1),
-                         ("req", 'i', 'w', self.channelNum)
+                         ("DMA interface", 'c', 'c', 1)
                          ]
+        for n in self.channelDict.keys():
+            self.portList.append((n+"_req", 'i', 'w', 1))
         for n, t in self.channelDict.items():
             if t.size=='v':
                 self.portList.append((n+"_size", 'i', 'w', 3))
@@ -348,6 +349,7 @@ class TopFile(object):
         f.write('\n'*2)
         rtlWriter.writeModulePortList(f, self.moduleName, self.portList)
         f.write('\n'*2)
+        rtlWriter.writeRegWireLine(f, ("req", 'w', self.channelNum))
         for n, t in self.channelDict.items():
             f.write("// Channel "+n+" signals\n")
             rtlWriter.writeRegWireLine(f, (n+"_trans_valid", 'w', 1))
@@ -370,6 +372,7 @@ class TopFile(object):
         validList = []
         i = 0
         for n in self.channelDict.keys():
+            rtlWriter.writeAssign(f, "req[" + str(i) + "]", [n+"_req"])
             caseDict[n+"_trans_valid"] = [rtlWriter.AssignStruct("trans_hsize", [n+"_trans_hsize"], False),
                                           rtlWriter.AssignStruct("trans_haddr", [n+"_trans_haddr"], False),
                                           rtlWriter.AssignStruct("trans_hwrite", [n+"_trans_hwrite"], False)]
@@ -383,7 +386,9 @@ class TopFile(object):
                    rtlWriter.AssignStruct("trans_haddr", ["32'h0"], False),
                    rtlWriter.AssignStruct("trans_hwrite", ["1'b0"], False),
                    rtlWriter.CaseStruct("1'b1", caseDict)]
+        f.write('\n'*2)
         rtlWriter.writeFlop(f, "", "", muxList)
+        f.write('\n')
         rtlWriter.writeAssign(f, "trans_valid", validList)
         f.write('\n'*2)
         f.write("fixed_order_arbiter_" + str(self.channelNum) + "_channels u_arb(\n")
