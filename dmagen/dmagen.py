@@ -1,12 +1,14 @@
 from collections import namedtuple
 ChannelType = namedtuple("ChannelType", ["dir", "paddr", "size"])
-channelDict = {"ch0"    :  ChannelType("r", "32'h12345000", 'v'),
-               "ch1"    :  ChannelType("t", "32'h4000ac00", 1),
-               "ch2"    :  ChannelType("r", "32'h50004400", 2),
-               "ch3"    :  ChannelType("t", "32'h4abcd800", 3)
+channelDict = {"ch0"       :  ChannelType(["r", "t"], ["32'h49002000", "32'h49002004"], 1),
+               "ch1"       :  ChannelType(["t"], ["32'h4900f000"], 1),
+               "ch2"       :  ChannelType(["r", "r", "r"], ["32'h49004000", "32'h49004000", "32'h49004000"], 1),
+               "ch3"       :  ChannelType(["t", "t", "t", "t", "r"], ["32'h49004004", "32'h49004000", "32'h49004000", "32'h49004000", "32'h49004004"], 1),
+               "ch4"       :  ChannelType(["r"], ["32'h4900a008"], 'v')
                }
 
 WITH_NEXT_CNT_PNT_REG = True
+
 
 import util
 if __name__ == "__main__":
