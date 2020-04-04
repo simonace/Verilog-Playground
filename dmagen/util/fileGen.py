@@ -153,6 +153,8 @@ class DmaRegFile(object):
         self.vsizeList = []
         self.fsizeList = []
         self.channelNameList = []
+        cntZeroList = []
+        enableList = []
         for chName, chType in self.channelDict.items():
             self.channelNameList.append(chName)
             if chType.size == 'v':
@@ -169,13 +171,15 @@ class DmaRegFile(object):
                 self.fsizeList.append((chName, "4'b0100"))
 
             self.portList.append((chName+"_pointer", 'o', 'w', 32))
+            cntZeroList.append((chName+"_channel_cnt_zero",'o', 'w', 1))
+            enableList.append((chName+"_channel_en", 'o', 'r', 1))
 
             if len(chType.dir)>1:
                 selList.append((chName+"_sel", 'o', 'r', 3))
 
-        self.portList = self.portList + sizeList + selList + [("transfer_finish", 'i', 'w', self.channelNum),
-                                                              ("channel_available", 'o', 'w', self.channelNum)
-                                                              ]
+        self.portList = self.portList + sizeList + selList + cntZeroList + enableList + [("transfer_finish", 'i', 'w', self.channelNum),
+                                                                                         ("channel_available", 'o', 'w', self.channelNum)
+                                                                                         ]
 
     def createRtl(self, withNextCntPntReg):
         f = open(self.moduleName + ".v", "w+")
@@ -201,14 +205,12 @@ class DmaRegFile(object):
             rtlWriter.writeRegWireLine(f, ("NEXT_COUNTER_addr_match", 'w', 1))
         for n in self.channelNameList:
             f.write("// " + n + "_channel regs\n")
-            rtlWriter.writeRegWireLine(f, (n+"_channel_en", 'r', 1))
             rtlWriter.writeRegWireLine(f, (n+"_channel_cnt", 'r', 16))
             rtlWriter.writeRegWireLine(f, (n+"_channel_pnt", 'r', 32))
             if withNextCntPntReg:
                 rtlWriter.writeRegWireLine(f, (n+"_channel_next_cnt", 'r', 16))
                 rtlWriter.writeRegWireLine(f, (n+"_channel_next_pnt", 'r', 32))
             rtlWriter.writeRegWireLine(f, (n+"_channel_cnt_will_empty", 'w', 1))
-            rtlWriter.writeRegWireLine(f, (n+"_channel_cnt_zero", 'w', 1))
             if withNextCntPntReg:
                 rtlWriter.writeRegWireLine(f, (n+"_channel_next_cnt_zero", 'w', 1))
             rtlWriter.writeRegWireLine(f, (n+"_channel_is_last_trans", 'w', 1))
@@ -345,6 +347,10 @@ class TopFile(object):
         for n, t in self.channelDict.items():
             if t.size=='v':
                 self.portList.append((n+"_size", 'i', 'w', 3))
+        for n in self.channelDict.keys():
+            self.portList.append((n+"_channel_en", 'o', 'w', 1))
+        for n in self.channelDict.keys():
+            self.portList.append((n+"_channel_cnt_zero", 'o', 'w', 1))
 
     def createRtl(self):
         f = open(self.moduleName + ".v", "w+")
@@ -476,6 +482,10 @@ class TopFile(object):
         for n, t in self.channelDict.items():
             if len(t.dir)>1:
                 rtlWriter.writeInstancePortLine(f, n+"_sel", n+"_sel")
+        for n in self.channelDict.keys():
+            rtlWriter.writeInstancePortLine(f, n+"_channel_cnt_zero", n+"_channel_cnt_zero")
+        for n in self.channelDict.keys():
+            rtlWriter.writeInstancePortLine(f, n+"_channel_en", n+"_channel_en")
         rtlWriter.writeInstancePortLine(f, "transfer_finish", "transfer_finish")
         rtlWriter.writeInstancePortLine(f, "channel_available", "channel_available", False)
         f.write(");\n")
