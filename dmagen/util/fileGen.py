@@ -347,8 +347,8 @@ class TopFile(object):
         for n, t in self.channelDict.items():
             if t.size=='v':
                 self.portList.append((n+"_size", 'i', 'w', 3))
-        for n in self.channelDict.keys():
-            self.portList.append((n+"_channel_en", 'o', 'w', 1))
+        for n, t in self.channelDict.items():
+            self.portList.append((n+"_channel_en", 'o', 'w', len(t.dir)))
         for n in self.channelDict.keys():
             self.portList.append((n+"_channel_cnt_zero", 'o', 'w', 1))
 
@@ -362,6 +362,7 @@ class TopFile(object):
         rtlWriter.writeRegWireLine(f, ("req", 'w', self.channelNum))
         for n, t in self.channelDict.items():
             f.write("// Channel "+n+" signals\n")
+            rtlWriter.writeRegWireLine(f, (n+"_channel_en_all", 'w', 1))
             rtlWriter.writeRegWireLine(f, (n+"_trans_valid", 'w', 1))
             rtlWriter.writeRegWireLine(f, (n+"_trans_hsize", 'w', 3))
             rtlWriter.writeRegWireLine(f, (n+"_trans_haddr", 'w', 32))
@@ -414,7 +415,8 @@ class TopFile(object):
                 reqList = []
                 for i in range(len(t.dir)):
                     b=bin(i)[2:]
-                    bb="(" + n + "sel == 3'b" + '0'*(3-len(b)) + b + ")"
+                    bb="(" + n + "_sel == 3'b" + '0'*(3-len(b)) + b + ")"
+                    rtlWriter.writeAssign(f, n+"_channel_en["+str(i)+"]", [bb, '&', n+"_channel_en_all"])
                     reqList = reqList + [bb, "?", n+"_req["+str(i)+"]", ":", '\n']
                     if t.dir[i] == 'r':
                         wrAddrList = wrAddrList + [bb, "?", n+"_pointer", ":", '\n']
@@ -429,6 +431,7 @@ class TopFile(object):
                 rtlWriter.writeAssign(f, n+"_rd_addr", rdAddrList)
                 rtlWriter.writeAssign(f, n+"_wr_addr", wrAddrList)
             else:
+                rtlWriter.writeAssign(f, n+"_channel_en", [n+"_channel_en_all"])
                 rtlWriter.writeAssign(f, "req["+str(j)+"]", [n+"_req"])
                 if t.dir[0] == 'r':
                     rtlWriter.writeAssign(f, n+"_rd_addr", [t.paddr[0]])
@@ -485,7 +488,7 @@ class TopFile(object):
         for n in self.channelDict.keys():
             rtlWriter.writeInstancePortLine(f, n+"_channel_cnt_zero", n+"_channel_cnt_zero")
         for n in self.channelDict.keys():
-            rtlWriter.writeInstancePortLine(f, n+"_channel_en", n+"_channel_en")
+            rtlWriter.writeInstancePortLine(f, n+"_channel_en", n+"_channel_en_all")
         rtlWriter.writeInstancePortLine(f, "transfer_finish", "transfer_finish")
         rtlWriter.writeInstancePortLine(f, "channel_available", "channel_available", False)
         f.write(");\n")
