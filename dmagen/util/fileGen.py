@@ -107,7 +107,7 @@ class ChannelFsm(object):
         rtlWriter.writeRegWireLine(f, ("allow_accept_req_d", 'r', 1))
         f.write('\n'*2)
         rtlWriter.writeAssign(f, "trans_valid", ["current_state[1]", "|", "current_state[2]"])
-        rtlWriter.writeAssign(f, "trans_size", ["hsize"])
+        rtlWriter.writeAssign(f, "trans_hsize", ["hsize"])
         rtlWriter.writeAssign(f, "trans_haddr", ["current_state[1]", "?", "rd_addr", ":", "(current_state[2]", "?", "wr_addr", ":", "32'h0)"])
         rtlWriter.writeAssign(f, "trans_hwrite", ["current_state[2]"])
         rtlWriter.writeAssign(f, "channel_not_trans", ["current_state[0]", "|", "current_state[3]"])
@@ -148,29 +148,15 @@ class DmaRegFile(object):
                          ("PWDATA", 'i', 'w', 32),
                          ("PRDATA", 'o', 'r', 32)
                          ]
-        sizeList = []
         selList = []
-        self.vsizeList = []
-        self.fsizeList = []
         self.channelNameList = []
         cntZeroList = []
         enableList = []
+        sizeList = []
         for chName, chType in self.channelDict.items():
             self.channelNameList.append(chName)
-            if chType.size == 'v':
-                sizeList.append((chName+"_size", 'i', 'w', 2))
-                self.vsizeList.append(chName)
-            elif chType.size == 1:
-                sizeList.append((chName+"_size is fixed as byte", 'c', 'c', 1))
-                self.fsizeList.append((chName, "4'b0001"))
-            elif chType.size == 2:
-                sizeList.append((chName+"_size is fixed as half-word", 'c', 'c', 1))
-                self.fsizeList.append((chName, "4'b0010"))
-            elif chType.size == 3:
-                sizeList.append((chName+"_size is fixed as word", 'c', 'c', 1))
-                self.fsizeList.append((chName, "4'b0100"))
-
             self.portList.append((chName+"_pointer", 'o', 'w', 32))
+            sizeList.append((chName+"_size", 'i', 'w', 2))
             cntZeroList.append((chName+"_channel_cnt_zero",'o', 'w', 1))
             enableList.append((chName+"_channel_en", 'o', 'r', 1))
 
@@ -187,12 +173,6 @@ class DmaRegFile(object):
         f.write('\n'*2)
         rtlWriter.writeModulePortList(f, self.moduleName, self.portList)
         f.write('\n'*2)
-        for t in self.fsizeList:
-            rtlWriter.writeLocalParam(f, t[0]+"_byte_size", t[1])
-        f.write('\n'*2)
-        for n in self.vsizeList:
-            rtlWriter.writeRegWireLine(f, (n+"_byte_size", 'w', 4))
-        f.write('\n')
         rtlWriter.writeRegWireLine(f, ("w_en", 'w', 1))
         rtlWriter.writeRegWireLine(f, ("r_en", 'w', 1))
         for n in self.channelNameList:
@@ -214,6 +194,7 @@ class DmaRegFile(object):
             if withNextCntPntReg:
                 rtlWriter.writeRegWireLine(f, (n+"_channel_next_cnt_zero", 'w', 1))
             rtlWriter.writeRegWireLine(f, (n+"_channel_is_last_trans", 'w', 1))
+            rtlWriter.writeRegWireLine(f, (n+"_byte_size", 'w', 4))
         rtlWriter.writeAssign(f, "w_en", ["PWRITE", "&", "PSEL", "&", "PENABLE"])
         rtlWriter.writeAssign(f, "r_en", ["(~PWRITE)", "&", "PSEL", "&", "PENABLE"])
         rtlWriter.writeAssign(f, "CONTROL_addr_match", ["PADDR[4:2]", "==", "3'b000"])
@@ -226,7 +207,7 @@ class DmaRegFile(object):
             b=bin(i)[2:]
             bb="5'b" + '0'*(5-len(b)) + b
             rtlWriter.writeAssign(f, self.channelNameList[i]+"_channel_addr_match", ["PADDR[9:5]", "==", bb])
-        for n in self.vsizeList:
+        for n in self.channelNameList:
             rtlWriter.writeAssign(f, n+"_byte_size", ["4'b0001", "<<", n+"_size"])
         for i in range(len(self.channelNameList)):
             n = self.channelNameList[i]
@@ -344,9 +325,25 @@ class TopFile(object):
                          ]
         for n, t in self.channelDict.items():
             self.portList.append((n+"_req", 'i', 'w', len(t.dir)))
+        self.fsizeList = []
         for n, t in self.channelDict.items():
-            if t.size=='v':
+            if len(t.size)==1:
+                self.portList.append(("Channel " + n + " only has one function", 'c', 'c', 1))
                 self.portList.append((n+"_size", 'i', 'w', 3))
+            else:
+                self.portList.append(("Channel " + n + " only has "+str(len(t.size)) + " functions", 'c', 'c', 1))
+                for i in range(len(t.size)):
+                    if t.size[i]=='v':
+                        self.portList.append((n+"_" + str(i)+"_size", 'i', 'w', 3))
+                    elif t.size[i]==1:
+                        self.portList.append((n+"_" + str(i)+"_size is fixed as byte", 'c', 'c', 1))
+                        self.fsizeList.append((n+"_" + str(i)+"_size", "3'b000"))
+                    elif t.size[i]==2:
+                        self.portList.append((n+"_" + str(i)+"_size is fixed as half-word", 'c', 'c', 1))
+                        self.fsizeList.append((n+"_" + str(i)+"_size", "3'b001"))
+                    elif t.size[i]==3:
+                        self.portList.append((n+"_" + str(i)+"_size is fixed as word", 'c', 'c', 1))
+                        self.fsizeList.append((n+"_" + str(i)+"_size", "3'b010"))
         for n, t in self.channelDict.items():
             self.portList.append((n+"_channel_en", 'o', 'w', len(t.dir)))
         for n in self.channelDict.keys():
@@ -359,6 +356,9 @@ class TopFile(object):
         f.write('\n'*2)
         rtlWriter.writeModulePortList(f, self.moduleName, self.portList)
         f.write('\n'*2)
+        for t in self.fsizeList:
+            rtlWriter.writeLocalParam(f, t[0], t[1])
+        f.write('\n')
         rtlWriter.writeRegWireLine(f, ("req", 'w', self.channelNum))
         for n, t in self.channelDict.items():
             f.write("// Channel "+n+" signals\n")
@@ -372,8 +372,11 @@ class TopFile(object):
             rtlWriter.writeRegWireLine(f, (n+"_pointer", 'w', 32))
             if len(t.dir)>1:
                 rtlWriter.writeRegWireLine(f, (n+"_sel", 'w', 3))
+                rtlWriter.writeRegWireLine(f, (n+"_size", 'w', 3))
             else:
                 f.write("// Channel " + n + " only has one function\n")
+                f.write("// No "+n+"_sel signal \n")
+                f.write("// "+n+"_size is directly from port\n")
         f.write('\n')
         rtlWriter.writeRegWireLine(f, ("start", 'w', self.channelNum))
         rtlWriter.writeRegWireLine(f, ("channel_available", 'w', self.channelNum))
@@ -413,11 +416,13 @@ class TopFile(object):
                 wrAddrList = []
                 rdAddrList = []
                 reqList = []
+                sizeList = []
                 for i in range(len(t.dir)):
                     b=bin(i)[2:]
                     bb="(" + n + "_sel == 3'b" + '0'*(3-len(b)) + b + ")"
                     rtlWriter.writeAssign(f, n+"_channel_en["+str(i)+"]", [bb, '&', n+"_channel_en_all"])
                     reqList = reqList + [bb, "?", n+"_req["+str(i)+"]", ":", '\n']
+                    sizeList = sizeList + [bb, "?", n+'_'+str(i)+"_size", ":", '\n']
                     if t.dir[i] == 'r':
                         wrAddrList = wrAddrList + [bb, "?", n+"_pointer", ":", '\n']
                         rdAddrList = rdAddrList + [bb, "?", t.paddr[i], ":", '\n']
@@ -427,9 +432,11 @@ class TopFile(object):
                 reqList.append("1'b0")
                 wrAddrList.append("32'h0")
                 rdAddrList.append("32'h0")
+                sizeList.append("3'b000")
                 rtlWriter.writeAssign(f, "req["+str(j)+"]", reqList)
                 rtlWriter.writeAssign(f, n+"_rd_addr", rdAddrList)
                 rtlWriter.writeAssign(f, n+"_wr_addr", wrAddrList)
+                rtlWriter.writeAssign(f, n+"_size", sizeList)
             else:
                 rtlWriter.writeAssign(f, n+"_channel_en", [n+"_channel_en_all"])
                 rtlWriter.writeAssign(f, "req["+str(j)+"]", [n+"_req"])
@@ -480,8 +487,7 @@ class TopFile(object):
         for n in self.channelDict.keys():
             rtlWriter.writeInstancePortLine(f, n+"_pointer", n+"_pointer")
         for n, t in self.channelDict.items():
-            if t.size=='v':
-                rtlWriter.writeInstancePortLine(f, n+"_size", n+"_size[1:0]")
+            rtlWriter.writeInstancePortLine(f, n+"_size", n+"_size[1:0]")
         for n, t in self.channelDict.items():
             if len(t.dir)>1:
                 rtlWriter.writeInstancePortLine(f, n+"_sel", n+"_sel")
@@ -503,15 +509,7 @@ class TopFile(object):
             rtlWriter.writeInstancePortLine(f, "HREADY", "HREADY")
             rtlWriter.writeInstancePortLine(f, "rd_addr", n+"_rd_addr")
             rtlWriter.writeInstancePortLine(f, "wr_addr", n+"_wr_addr")
-            if t.size=='v':
-                s = n+"_size"
-            elif t.size==1:
-                s = "3'b000"
-            elif t.size==2:
-                s = "3'b001"
-            elif t.size==3:
-                s = "3'b010"
-            rtlWriter.writeInstancePortLine(f, "hsize", s)
+            rtlWriter.writeInstancePortLine(f, "hsize", n+"_size")
             rtlWriter.writeInstancePortLine(f, "trans_valid", n+"_trans_valid")
             rtlWriter.writeInstancePortLine(f, "trans_hsize", n+"_trans_hsize")
             rtlWriter.writeInstancePortLine(f, "trans_haddr", n+"_trans_haddr")
