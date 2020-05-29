@@ -531,12 +531,12 @@ class TopFile(object):
         f.write("//" + "-"*70 + '\n')
         f.write("//|" + "Channel Nr.".center(12)+ "|" + "Channel Name".center(24) + "|" + "Direction".center(12) + "|" + "TX/RX Reg Addr".center(18)+'\n')
         f.write("//|" + '-'*12 + "|" + '-'*24 + "|" + '-'*12 + "|" + '-'*18 + '\n')
-        i = 0
+        j = 0
         for n, t in self.channelDict.items():
-            f.write("//|" + str(i).center(12) + "|" + n.center(24) + "|" + '-'*31 + '\n')
+            f.write("//|" + str(j).center(12) + "|" + n.center(24) + "|" + '-'*31 + '\n')
             for i in range(len(t.dir)):
                 f.write("//|" + '-'*37 + "|" + ("RX" if t.dir[i]=='r' else "TX").center(12) + "|" + t.paddr[i].center(18) + '\n')
-            i = i+1
+            j = j+1
             f.write("//|" + '-'*37 + "|" + '-'*31 + '\n')
         f.write("//|" + '-'*12 + "|" + '-'*24 + "|" + '-'*12 + "|" + '-'*18 + '\n')
 
