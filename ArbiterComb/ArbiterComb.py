@@ -53,7 +53,7 @@ pendOrString = ""
 for i in range(PORT_NUM):
     reqOrString = reqOrString + "req_port" + str(i) + " | "
     pendOrString = pendOrString + " | pend_port" + str(i)
-f.write("assign no_port = ~(" + reqOrString + pendOrString[3:] + ");\n")
+f.write("assign no_port = ~(" + reqOrString + pendOrString[3:] + ") | ~HREADYM;\n")
 f.write("assign no_pend = ~(" + pendOrString[3:] + ");\n")
 f.write('\n')
 
