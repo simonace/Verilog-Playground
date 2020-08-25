@@ -46,7 +46,7 @@ reg     req_grant2  ;
 reg     req_grant3  ;
 
 
-assign no_port = ~(req_port0 | req_port1 | req_port2 | req_port3 | pend_port0 | pend_port1 | pend_port2 | pend_port3);
+assign no_port = ~(req_port0 | req_port1 | req_port2 | req_port3 | pend_port0 | pend_port1 | pend_port2 | pend_port3) | ~HREADYM;
 assign no_pend = ~(pend_port0 | pend_port1 | pend_port2 | pend_port3);
 
 always @(*) begin
