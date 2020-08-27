@@ -41,68 +41,41 @@ f.write(' '*4 + "output".ljust(8) + "wire".ljust(8) + ''.ljust(8) + "no_port".lj
 f.write('\n')
 f.write(");\n\n")
 
-f.write("wire".ljust(8) + "no_pend".ljust(12) + ";\n")
-for i in range(PORT_NUM):
-    f.write("reg".ljust(8) + ("pend_port" + str(i)).ljust(12) + ";\n")
-for i in range(PORT_NUM):
-    f.write("reg".ljust(8) + ("req_grant" + str(i)).ljust(12) + ";\n")
+f.write("reg".ljust(8) + ("[" + str(addrInPortWidth-1) + ":0]").ljust(8) + "last_addr_in_port".ljust(12) + ";\n")
 f.write('\n'*2)
 
 reqOrString = ""
 pendOrString = ""
 for i in range(PORT_NUM):
     reqOrString = reqOrString + "req_port" + str(i) + " | "
-    pendOrString = pendOrString + " | pend_port" + str(i)
-f.write("assign no_port = ~(" + reqOrString + pendOrString[3:] + ") | ~HREADYM;\n")
-f.write("assign no_pend = ~(" + pendOrString[3:] + ");\n")
+f.write("assign no_port = ~(" + reqOrString[:-3] + ") | ~HREADYM;\n")
 f.write('\n')
 
 f.write("always @(*) begin\n")
-f.write(' '*4 + "if (HSELM & (HTRANSM != 2'b00)) begin\n")
 for i in range(PORT_NUM):
-    f.write(' '*8 + ("else " if i>0 else "") + "if (pend_port" + str(i) + ") begin\n")
-    f.write(' '*12 + "addr_in_port = " + str(addrInPortWidth) + "'d" + str(i) + ";\n")
+    ifElseIf = "if" if i==0 else "else if"
+    f.write(' '*4 + ifElseIf + " (last_addr_in_port==" + str(addrInPortWidth) + "'d" + str(i) + ") begin\n")
     for j in range(PORT_NUM):
-        f.write(' '*12 + "req_grant" + str(j) + " = 1'b0;\n")
+        ifElseIf = "if" if j==0 else "else if"
+        nextNum = (i + j + 1)%PORT_NUM
+        f.write(' '*8 + ifElseIf + " (req_port" + str(nextNum) + ") begin\n")
+        f.write(' '*12 + "addr_in_port = " + str(addrInPortWidth) + "'d" + str(nextNum) + ";\n")
+        f.write(' '*8 + "end\n")
+    f.write(' '*8 + "else begin\n")
+    f.write(' '*12 + "addr_in_port = " + str(addrInPortWidth) + "'d0;\n")
     f.write(' '*8 + "end\n")
-for i in range(PORT_NUM):
-    f.write(' '*8 + "else if (req_port" + str(i) + ") begin\n")
-    f.write(' '*12 + "addr_in_port = " + str(addrInPortWidth) + "'d" + str(i) + ";\n")
-    for j in range(PORT_NUM):
-        f.write(' '*12 + "req_grant" + str(j) + " = 1'b" + ("1" if j==i else "0") +  ";\n")
-    f.write(' '*8 + "end\n")
-f.write(' '*8 + "else begin\n")
-f.write(' '*12 + "addr_in_port = " + str(addrInPortWidth) + "'d0;\n")
-for j in range(PORT_NUM):
-    f.write(' '*12 + "req_grant" + str(j) + " = 1'b0;\n")
-f.write(' '*8 + "end\n")
-f.write(' '*8 + "end\n")
-f.write(' '*4 + "end\n")
+    f.write(' '*4 + "end\n")
 f.write(' '*4 + "else begin\n")
 f.write(' '*8 + "addr_in_port = " + str(addrInPortWidth) + "'d0;\n")
-for j in range(PORT_NUM):
-    f.write(' '*8 + "req_grant" + str(j) + " = 1'b0;\n")
-f.write(' '*8 + "end\n")
 f.write(' '*4 + "end\n")
 f.write("end\n\n")
 
 f.write("always @(negedge HRESETn or posedge HCLK) begin\n")
 f.write(' '*4 + "if (~HRESETn) begin\n")
-for i in range(PORT_NUM):
-    f.write(' '*8 + "pend_port" + str(i) + " <= 1'b0;\n")
+f.write(' '*8 + "last_addr_in_port <= " + str(addrInPortWidth) + "'d0;\n")
 f.write(' '*4 + "end\n")
-f.write(' '*4 + "else begin\n")
-f.write(' '*8 + "if (~HMASTLOCK & HREADYM) begin\n")
-f.write(' '*12 + "if (no_pend) begin\n")
-for i in range(PORT_NUM):
-    f.write(' '*16 + "pend_port" + str(i) + " <= ~req_grant" + str(i) + " & req_port" + str(i) + ";\n")
-f.write(' '*12 + "end\n")
-for i in range(PORT_NUM):
-    f.write(' '*12 + "else if (pend_port" + str(i) + ") begin\n")
-    for j in range(PORT_NUM):
-        f.write(' '*16 + "pend_port" + str(j) + " <= " + ("1'b0" if j<=i else ("pend_port" + str(j))) + ";\n")
-    f.write(' '*12 + "end\n")
-f.write(' '*8 + "end\n")
+f.write(' '*4 + "else if (~no_port) begin\n")
+f.write(' '*8 + "last_addr_in_port <= addr_in_port;\n")
 f.write(' '*4 + "end\n")
 f.write("end\n\n")
 
