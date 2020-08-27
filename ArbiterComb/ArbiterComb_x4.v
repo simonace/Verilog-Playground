@@ -35,137 +35,91 @@ module ArbiterComb_x4(
 
 );
 
-wire    no_pend     ;
-reg     pend_port0  ;
-reg     pend_port1  ;
-reg     pend_port2  ;
-reg     pend_port3  ;
-reg     req_grant0  ;
-reg     req_grant1  ;
-reg     req_grant2  ;
-reg     req_grant3  ;
+reg     [1:0]   last_addr_in_port;
 
 
-assign no_port = ~(req_port0 | req_port1 | req_port2 | req_port3 | pend_port0 | pend_port1 | pend_port2 | pend_port3) | ~HREADYM;
-assign no_pend = ~(pend_port0 | pend_port1 | pend_port2 | pend_port3);
+assign no_port = ~(req_port0 | req_port1 | req_port2 | req_port3) | ~HREADYM;
 
 always @(*) begin
-    if (HSELM & (HTRANSM != 2'b00)) begin
-        if (pend_port0) begin
-            addr_in_port = 2'd0;
-            req_grant0 = 1'b0;
-            req_grant1 = 1'b0;
-            req_grant2 = 1'b0;
-            req_grant3 = 1'b0;
-        end
-        else if (pend_port1) begin
+    if (last_addr_in_port==2'd0) begin
+        if (req_port1) begin
             addr_in_port = 2'd1;
-            req_grant0 = 1'b0;
-            req_grant1 = 1'b0;
-            req_grant2 = 1'b0;
-            req_grant3 = 1'b0;
-        end
-        else if (pend_port2) begin
-            addr_in_port = 2'd2;
-            req_grant0 = 1'b0;
-            req_grant1 = 1'b0;
-            req_grant2 = 1'b0;
-            req_grant3 = 1'b0;
-        end
-        else if (pend_port3) begin
-            addr_in_port = 2'd3;
-            req_grant0 = 1'b0;
-            req_grant1 = 1'b0;
-            req_grant2 = 1'b0;
-            req_grant3 = 1'b0;
-        end
-        else if (req_port0) begin
-            addr_in_port = 2'd0;
-            req_grant0 = 1'b1;
-            req_grant1 = 1'b0;
-            req_grant2 = 1'b0;
-            req_grant3 = 1'b0;
-        end
-        else if (req_port1) begin
-            addr_in_port = 2'd1;
-            req_grant0 = 1'b0;
-            req_grant1 = 1'b1;
-            req_grant2 = 1'b0;
-            req_grant3 = 1'b0;
         end
         else if (req_port2) begin
             addr_in_port = 2'd2;
-            req_grant0 = 1'b0;
-            req_grant1 = 1'b0;
-            req_grant2 = 1'b1;
-            req_grant3 = 1'b0;
         end
         else if (req_port3) begin
             addr_in_port = 2'd3;
-            req_grant0 = 1'b0;
-            req_grant1 = 1'b0;
-            req_grant2 = 1'b0;
-            req_grant3 = 1'b1;
+        end
+        else if (req_port0) begin
+            addr_in_port = 2'd0;
         end
         else begin
             addr_in_port = 2'd0;
-            req_grant0 = 1'b0;
-            req_grant1 = 1'b0;
-            req_grant2 = 1'b0;
-            req_grant3 = 1'b0;
         end
+    end
+    else if (last_addr_in_port==2'd1) begin
+        if (req_port2) begin
+            addr_in_port = 2'd2;
+        end
+        else if (req_port3) begin
+            addr_in_port = 2'd3;
+        end
+        else if (req_port0) begin
+            addr_in_port = 2'd0;
+        end
+        else if (req_port1) begin
+            addr_in_port = 2'd1;
+        end
+        else begin
+            addr_in_port = 2'd0;
+        end
+    end
+    else if (last_addr_in_port==2'd2) begin
+        if (req_port3) begin
+            addr_in_port = 2'd3;
+        end
+        else if (req_port0) begin
+            addr_in_port = 2'd0;
+        end
+        else if (req_port1) begin
+            addr_in_port = 2'd1;
+        end
+        else if (req_port2) begin
+            addr_in_port = 2'd2;
+        end
+        else begin
+            addr_in_port = 2'd0;
+        end
+    end
+    else if (last_addr_in_port==2'd3) begin
+        if (req_port0) begin
+            addr_in_port = 2'd0;
+        end
+        else if (req_port1) begin
+            addr_in_port = 2'd1;
+        end
+        else if (req_port2) begin
+            addr_in_port = 2'd2;
+        end
+        else if (req_port3) begin
+            addr_in_port = 2'd3;
+        end
+        else begin
+            addr_in_port = 2'd0;
         end
     end
     else begin
         addr_in_port = 2'd0;
-        req_grant0 = 1'b0;
-        req_grant1 = 1'b0;
-        req_grant2 = 1'b0;
-        req_grant3 = 1'b0;
-        end
     end
 end
 
 always @(negedge HRESETn or posedge HCLK) begin
     if (~HRESETn) begin
-        pend_port0 <= 1'b0;
-        pend_port1 <= 1'b0;
-        pend_port2 <= 1'b0;
-        pend_port3 <= 1'b0;
+        last_addr_in_port <= 2'd0;
     end
-    else begin
-        if (~HMASTLOCK & HREADYM) begin
-            if (no_pend) begin
-                pend_port0 <= ~req_grant0 & req_port0;
-                pend_port1 <= ~req_grant1 & req_port1;
-                pend_port2 <= ~req_grant2 & req_port2;
-                pend_port3 <= ~req_grant3 & req_port3;
-            end
-            else if (pend_port0) begin
-                pend_port0 <= 1'b0;
-                pend_port1 <= pend_port1;
-                pend_port2 <= pend_port2;
-                pend_port3 <= pend_port3;
-            end
-            else if (pend_port1) begin
-                pend_port0 <= 1'b0;
-                pend_port1 <= 1'b0;
-                pend_port2 <= pend_port2;
-                pend_port3 <= pend_port3;
-            end
-            else if (pend_port2) begin
-                pend_port0 <= 1'b0;
-                pend_port1 <= 1'b0;
-                pend_port2 <= 1'b0;
-                pend_port3 <= pend_port3;
-            end
-            else if (pend_port3) begin
-                pend_port0 <= 1'b0;
-                pend_port1 <= 1'b0;
-                pend_port2 <= 1'b0;
-                pend_port3 <= 1'b0;
-            end
-        end
+    else if (~no_port) begin
+        last_addr_in_port <= addr_in_port;
     end
 end
 
